@@ -102,6 +102,14 @@ def fmt_group(items):
             parts.append(f"[{orig}×{rate_str}={p}]")
     return "+".join(parts)
 
+# ===================== 初始化session状态 =====================
+if "result_pack" not in st.session_state:
+    st.session_state.result_pack = None
+if "result_msg" not in st.session_state:
+    st.session_state.result_msg = ""
+if "hit_ids" not in st.session_state:
+    st.session_state.hit_ids = set()
+
 # ===================== 网页界面 =====================
 st.set_page_config(page_title="价格计算（同活动多次满减）", layout="wide")
 st.title("价格计算（同活动只减一次）")
@@ -117,8 +125,7 @@ test_rows = [
 
 col_left, col_right = st.columns([3.4, 2])
 
-# 【第一步：先渲染左侧商品列表，生成item_data！】
-hit_id_set = set()
+# 【左侧商品列表】
 item_data = []
 with col_left:
     st.subheader("商品列表（共30条）")
@@ -145,19 +152,20 @@ with col_left:
         options = [0,1,2,3,4,5]
         keys_radio = [f"sel_{idx}_0",f"sel_{idx}_1",f"sel_{idx}_2",f"sel_{idx}_3",f"sel_{idx}_4",f"sel_{idx}_5"]
         for opt_i, opt_val in enumerate(options):
-            if r_cols[3 + opt_i].radio("", [opt_val], index=0 if default_sel==opt_val else None, key=keys_radio[opt_i], label_visibility="collapsed") is not None:
+            radio_val = r_cols[3 + opt_i].radio("", [opt_val], index=0 if default_sel==opt_val else None, key=keys_radio[opt_i], label_visibility="collapsed")
+            if radio_val is not None:
                 sel = opt_val
         if sel is None:
             sel = default_sel
         item_data.append( (idx, price_str, disc_str, sel) )
-        # 标记显示
-        if idx in hit_id_set:
+        # 标记：从session读取
+        if idx in st.session_state.hit_ids:
             r_cols[9].markdown("✅")
         else:
             r_cols[9].write("")
 
 
-# 【第二步：右侧参数面板】
+# 【右侧参数面板】
 with col_right:
     st.subheader("参数设置")
     target_val = st.text_input("目标额度", value="1401", key="target_input")
@@ -188,82 +196,90 @@ if clear_btn:
     st.session_state.clear()
     st.rerun()
 
-# 【第三步：计算逻辑（此时item_data已经存在）】
+# 【点击计算】
 if run_btn:
-    try:
-        target = Decimal(target_val.strip())
-    except:
-        with result_area:
-            st.error("目标额度输入错误！")
-        st.stop()
-
-    rule_list = []
-    for f_txt, r_txt in rule_data:
-        if f_txt.strip() == "" or r_txt.strip() == "":
-            rule_list.append(None)
-        else:
-            try:
-                f = Decimal(f_txt.strip())
-                r = Decimal(r_txt.strip())
-                rule_list.append((f, r))
-            except:
-                with result_area:
-                    st.error("满减规则数字非法！")
-                st.stop()
-
-    item_pool = []
-    for idx, price_str, disc_str, sel in item_data:
-        if price_str.strip() == "":
-            continue
-        try:
-            val = Decimal(price_str.strip())
-            disc = Decimal(disc_str.strip()) if disc_str.strip() else Decimal("100")
-            price_disc = val * disc / Decimal("100")
-            item_pool.append((idx, val, disc, price_disc, sel))
-        except:
-            with result_area:
-                st.error(f"第{idx+1}行单价/折扣格式错误！")
-            st.stop()
-
-    if len(item_pool) == 0:
-        with result_area:
-            st.warning("没有录入有效商品！")
-        st.stop()
-
-    res_pack = meet_in_the_middle(item_pool, rule_list, target)
-    if res_pack is not None:
-        hit_id_set = {x[0] for x in res_pack}
-        # 强制刷新页面，渲染✅标记
-        st.rerun()
-
     with result_area:
-        if res_pack is None:
-            st.markdown(f"❌ **没有找到满减后正好等于 {target} 的商品组合！**")
-        else:
-            selected_prices = [str(i[1]) for i in res_pack]
-            total, detail, group_items = calc_total_after_group_reduce(res_pack, rule_list)
-            g0, g1, g2, g3, g4, g5, r1, r2, r3, r4, r5 = detail
-            g0_items, g1_items, g2_items, g3_items, g4_items, g5_items = group_items
+        with st.spinner("正在计算，请稍候..."):
+            try:
+                target = Decimal(target_val.strip())
+            except:
+                st.session_state.result_msg = "❌ 目标额度输入错误！"
+                st.session_state.result_pack = None
+                st.session_state.hit_ids = set()
+            else:
+                rule_list = []
+                rule_err = False
+                for f_txt, r_txt in rule_data:
+                    if f_txt.strip() == "" or r_txt.strip() == "":
+                        rule_list.append(None)
+                    else:
+                        try:
+                            f = Decimal(f_txt.strip())
+                            r = Decimal(r_txt.strip())
+                            rule_list.append((f, r))
+                        except:
+                            rule_err = True
+                            break
+                if rule_err:
+                    st.session_state.result_msg = "❌ 满减规则数字非法！"
+                    st.session_state.result_pack = None
+                    st.session_state.hit_ids = set()
+                else:
+                    item_pool = []
+                    item_err = False
+                    for idx, price_str, disc_str, sel in item_data:
+                        if price_str.strip() == "":
+                            continue
+                        try:
+                            val = Decimal(price_str.strip())
+                            disc = Decimal(disc_str.strip()) if disc_str.strip() else Decimal("100")
+                            price_disc = val * disc / Decimal("100")
+                            item_pool.append((idx, val, disc, price_disc, sel))
+                        except:
+                            st.session_state.result_msg = f"❌ 第{idx+1}行单价/折扣格式错误！"
+                            st.session_state.result_pack = None
+                            st.session_state.hit_ids = set()
+                            item_err = True
+                            break
+                    if item_err:
+                        pass
+                    elif len(item_pool) == 0:
+                        st.session_state.result_msg = "⚠️ 没有录入有效商品！"
+                        st.session_state.result_pack = None
+                        st.session_state.hit_ids = set()
+                    else:
+                        res_pack = meet_in_the_middle(item_pool, rule_list, target)
+                        st.session_state.result_pack = res_pack
+                        if res_pack is None:
+                            st.session_state.result_msg = f"❌ **没有找到满减后正好等于 {target} 的商品组合！**"
+                            st.session_state.hit_ids = set()
+                        else:
+                            hit_id_set = {x[0] for x in res_pack}
+                            st.session_state.hit_ids = hit_id_set
+                            total, detail, group_items = calc_total_after_group_reduce(res_pack, rule_list)
+                            g0, g1, g2, g3, g4, g5, r1, r2, r3, r4, r5 = detail
+                            g0_items, g1_items, g2_items, g3_items, g4_items, g5_items = group_items
+                            selected_prices = [str(i[1]) for i in res_pack]
+                            msg_lines = []
+                            msg_lines.append(f"🎯 目标额度：**{target}**")
+                            msg_lines.append(f"✅ 最终合计（分组汇总后分别满减）：**{total}**")
+                            msg_lines.append("🔢 选中价格：<span style='color:red'>" + ",".join(selected_prices) + "</span>")
+                            msg_lines.append("📋 分组明细：")
+                            if g0_items:
+                                msg_lines.append(f"<b>无满减组：</b>{fmt_group(g0_items)} = {g0} → 结算：{g0}")
+                            if rule_texts[0] and g1_items:
+                                msg_lines.append(f"<b>{rule_texts[0]}：</b>{fmt_group(g1_items)} = {g1} → 结算：{r1}")
+                            if rule_texts[1] and g2_items:
+                                msg_lines.append(f"<b>{rule_texts[1]}：</b>{fmt_group(g2_items)} = {g2} → 结算：{r2}")
+                            if rule_texts[2] and g3_items:
+                                msg_lines.append(f"<b>{rule_texts[2]}：</b>{fmt_group(g3_items)} = {g3} → 结算：{r3}")
+                            if rule_texts[3] and g4_items:
+                                msg_lines.append(f"<b>{rule_texts[3]}：</b>{fmt_group(g4_items)} = {g4} → 结算：{r4}")
+                            if rule_texts[4] and g5_items:
+                                msg_lines.append(f"<b>{rule_texts[4]}：</b>{fmt_group(g5_items)} = {g5} → 结算：{r5}")
+                            st.session_state.result_msg = "\n\n".join(msg_lines)
 
-            st.markdown(f"🎯 目标额度：**{target}**")
-            st.markdown(f"✅ 最终合计（分组汇总后分别满减）：**{total}**")
-            st.markdown("🔢 选中价格：<span style='color:red'>" + ",".join(selected_prices) + "</span>", unsafe_allow_html=True)
-            st.markdown("📋 分组明细：")
-            if g0_items:
-                st.markdown(f"<b>无满减组：</b>{fmt_group(g0_items)} = {g0} → 结算：{g0}", unsafe_allow_html=True)
-                st.write("")
-            if rule_texts[0] and g1_items:
-                st.markdown(f"<b>{rule_texts[0]}：</b>{fmt_group(g1_items)} = {g1} → 结算：{r1}", unsafe_allow_html=True)
-                st.write("")
-            if rule_texts[1] and g2_items:
-                st.markdown(f"<b>{rule_texts[1]}：</b>{fmt_group(g2_items)} = {g2} → 结算：{r2}", unsafe_allow_html=True)
-                st.write("")
-            if rule_texts[2] and g3_items:
-                st.markdown(f"<b>{rule_texts[2]}：</b>{fmt_group(g3_items)} = {g3} → 结算：{r3}", unsafe_allow_html=True)
-                st.write("")
-            if rule_texts[3] and g4_items:
-                st.markdown(f"<b>{rule_texts[3]}：</b>{fmt_group(g4_items)} = {g4} → 结算：{r4}", unsafe_allow_html=True)
-                st.write("")
-            if rule_texts[4] and g5_items:
-                st.markdown(f"<b>{rule_texts[4]}：</b>{fmt_group(g5_items)} = {g5} → 结算：{r5}", unsafe_allow_html=True)
-                st.write("")
+# 【固定展示结果区域，每次页面刷新都会读取session里的结果】
+with result_area:
+    if st.session_state.result_msg:
+        st.markdown(st.session_state.result_msg, unsafe_allow_html=True)
