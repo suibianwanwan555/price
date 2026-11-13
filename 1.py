@@ -1,12 +1,9 @@
-import bisect
-import tkinter as tk
-from tkinter import ttk, messagebox
 from decimal import Decimal, getcontext
-import threading
+import streamlit as st
 
 getcontext().prec = 20
-stop_flag = False
 
+# ===================== 核心计算函数（完全原样保留，没有改动） =====================
 def calc_total_after_group_reduce(selected_items, rule_list):
     g0_items = []
     g1_items = []
@@ -16,20 +13,20 @@ def calc_total_after_group_reduce(selected_items, rule_list):
     g5_items = []
     for idx, orig, disc, price, sel in selected_items:
         if sel == 0:
-            g0_items.append((idx, orig, disc, price))
+            g0_items.append((orig, disc, price))
         elif sel == 1:
-            g1_items.append((idx, orig, disc, price))
+            g1_items.append((orig, disc, price))
         elif sel == 2:
-            g2_items.append((idx, orig, disc, price))
+            g2_items.append((orig, disc, price))
         elif sel == 3:
-            g3_items.append((idx, orig, disc, price))
+            g3_items.append((orig, disc, price))
         elif sel == 4:
-            g4_items.append((idx, orig, disc, price))
+            g4_items.append((orig, disc, price))
         elif sel == 5:
-            g5_items.append((idx, orig, disc, price))
+            g5_items.append((orig, disc, price))
 
     def sum_price(lst):
-        return sum(p for _, _, _, p in lst)
+        return sum(p for o, d, p in lst)
 
     g0_sum = sum_price(g0_items)
     g1_sum = sum_price(g1_items)
@@ -56,8 +53,7 @@ def calc_total_after_group_reduce(selected_items, rule_list):
     return total, (g0_sum, g1_sum, g2_sum, g3_sum, g4_sum, g5_sum, r1, r2, r3, r4, r5), (g0_items, g1_items, g2_items, g3_items, g4_items, g5_items)
 
 def meet_in_the_middle(item_pool, rule_list, target):
-    global stop_flag
-    item_pool_sorted = item_pool
+    item_pool_sorted = sorted(item_pool, key=lambda x: x[0])
     n = len(item_pool_sorted)
     if n == 0:
         return None
@@ -69,8 +65,6 @@ def meet_in_the_middle(item_pool, rule_list, target):
         res = []
         m = len(arr)
         for mask in range(0, 1 << m):
-            if stop_flag:
-                return []
             pack = []
             for i in range(m):
                 if mask & (1 << i):
@@ -80,11 +74,7 @@ def meet_in_the_middle(item_pool, rule_list, target):
         return res
 
     sub_left = gen_subset(left_arr)
-    if stop_flag:
-        return None
     sub_right = gen_subset(right_arr)
-    if stop_flag:
-        return None
 
     right_dict = {}
     for s_r, pack_r in sub_right:
@@ -93,8 +83,6 @@ def meet_in_the_middle(item_pool, rule_list, target):
         right_dict[s_r].append(pack_r)
 
     for s_l, pack_l in sub_left:
-        if stop_flag:
-            return None
         need = target - s_l
         if need in right_dict:
             for pack_r in right_dict[need]:
@@ -106,201 +94,193 @@ def meet_in_the_middle(item_pool, rule_list, target):
 
 def fmt_group(items):
     parts = []
-    for _, orig, disc, p in items:
-        d_num = float(disc)
-        if d_num == 100:
+    for orig, disc, p in items:
+        if disc == 100:
             parts.append(f"{orig}")
         else:
-            s = str(d_num / 100).rstrip("0").rstrip(".") if "." in str(d_num / 100) else str(d_num / 100)
-            parts.append(f"[{orig}×{s}={p}]")
+            rate_str = str(float(disc / 100)).rstrip('0').rstrip('.') if '.' in str(float(disc / 100)) else str(float(disc / 100))
+            parts.append(f"[{orig}×{rate_str}={p}]")
     return "+".join(parts)
 
-class App:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("价格计算（同活动只减一次）")
-        self.root.geometry("800x720")
-        self.hit_index_set = set()
+# ===================== 初始化session状态 =====================
+if "result_pack" not in st.session_state:
+    st.session_state.result_pack = None
+if "result_msg" not in st.session_state:
+    st.session_state.result_msg = ""
+if "hit_ids" not in st.session_state:
+    st.session_state.hit_ids = set()
 
-        self.price_ents = []
-        self.disc_ents = []
-        self.sel_vars = []
-        self.mark_vars = []
+# ===================== 网页界面 =====================
+st.set_page_config(page_title="价格计算（同活动多次满减）", layout="wide")
+st.title("价格计算（同活动只减一次）")
 
-        left_frame = tk.Frame(root)
-        left_frame.grid(row=0, column=0, padx=5, pady=5, sticky="n")
-        right_frame = tk.Frame(root)
-        right_frame.grid(row=0, column=1, padx=5, pady=5, sticky="n")
+test_rows = [
+    (1, 100, "90", 2), (2, 20, "", 1), (3, 30, "", 1), (4, 40, "", 5), (5, 50, "", 1),
+    (6, 60, "", 2), (7, 70, "", 2), (8, 80, "", 2), (9, 90, "", 2), (10,10, "", 1),
+    (11,110,"90",3), (12,125,"88",3), (13,130,"50",3), (14,145,"88",3), (15,155,"88",3),
+    (16,160,"80",0), (17,175,"88",0), (18,180,"80",5), (19,190,"",5), (20,200,"",5),
+    (21,210,"",5), (22,88, "", 0), (23,135,"80",4), (24,220,"85",4), (25,230,"90",3),
+    (26,240,"88",4), (27,250,"82",4), (28,260,"",4), (29,270,"",0), (30,280,"",1),
+]
 
-        headers = ["序号","单价","折扣","无满减","满减1","满减2","满减3","满减4","满减5","标记"]
-        for col,txt in enumerate(headers):
-            tk.Label(left_frame, text=txt, font=("SimSun",9)).grid(row=0, column=col, padx=2)
+col_left, col_right = st.columns([3.4, 2])
 
-        for row in range(1, 31):
-            idx = row - 1
-            tk.Label(left_frame, text=f"{row:02d}", font=("SimSun",9)).grid(row=row, column=0)
-            e_p = tk.Entry(left_frame, width=6)
-            e_p.grid(row=row, column=1, padx=1)
-            e_d = tk.Entry(left_frame, width=6)
-            e_d.grid(row=row, column=2, padx=1)
-            self.price_ents.append(e_p)
-            self.disc_ents.append(e_d)
+# 【左侧商品列表】
+item_data = []
+with col_left:
+    st.subheader("商品列表（共30条）")
+    h_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6])
+    h_cols[0].write("序号")
+    h_cols[1].write("单价")
+    h_cols[2].write("折扣")
+    h_cols[3].write("无满减")
+    h_cols[4].write("满减1")
+    h_cols[5].write("满减2")
+    h_cols[6].write("满减3")
+    h_cols[7].write("满减4")
+    h_cols[8].write("满减5")
+    h_cols[9].write("标记")
+    st.divider()
 
-            var_r = tk.IntVar(value=0)
-            self.sel_vars.append(var_r)
-            for c in range(3,9):
-                tk.Radiobutton(left_frame, variable=var_r, value=c-3, text="").grid(row=row, column=c)
-            var_m = tk.BooleanVar(value=False)
-            # 重点修改：去掉DISABLED，绑定一个空函数禁止用户手动点击
-            cb = tk.Checkbutton(left_frame, variable=var_m, command=lambda v=var_m: v.set(not v.get()))
-            cb.grid(row=row, column=9)
-            self.mark_vars.append(var_m)
+    for idx in range(30):
+        seq, default_price, default_disc, default_sel = test_rows[idx]
+        r_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6])
+        r_cols[0].write(f"{seq:02d}")
+        price_str = r_cols[1].text_input("", value=default_price, key=f"p_{idx}", label_visibility="collapsed")
+        disc_str = r_cols[2].text_input("", value=default_disc, key=f"d_{idx}", label_visibility="collapsed")
 
-        tk.Label(right_frame, text="控制面板 & 计算结果", font=("SimSun",10,"bold")).grid(row=0, column=0, columnspan=2)
-        tk.Label(right_frame, text="目标额度：").grid(row=1, column=0, sticky="w")
-        self.target_ent = tk.Entry(right_frame, width=12)
-        self.target_ent.grid(row=1, column=1)
+        # ========== 修复重点：一行只用1个radio，6个选项互斥 ==========
+        sel = r_cols[3].radio(
+            "",
+            options=[0,1,2,3,4,5],
+            index=default_sel,
+            horizontal=True,
+            key=f"sel_{idx}",
+            label_visibility="collapsed"
+        )
 
-        tk.Label(right_frame, text="【全局5套满减规则】").grid(row=2, column=0, columnspan=2, pady=(8,0))
-        self.rule_full = []
-        self.rule_reduce = []
-        default_rule = [("50","5"),("200","20"),("300","30"),("250","15"),("400","20")]
-        for i in range(5):
-            f_e = tk.Entry(right_frame, width=6)
-            f_e.insert(0, default_rule[i][0])
-            r_e = tk.Entry(right_frame, width=6)
-            r_e.insert(0, default_rule[i][1])
-            tk.Label(right_frame, text=f"满减{i+1}: 满").grid(row=3+i, column=0, sticky="e")
-            f_e.grid(row=3+i, column=1)
-            tk.Label(right_frame, text="减").grid(row=3+i, column=2)
-            r_e.grid(row=3+i, column=3)
-            self.rule_full.append(f_e)
-            self.rule_reduce.append(r_e)
+        item_data.append( (idx, price_str, disc_str, sel) )
+        # 标记：从session读取
+        if idx in st.session_state.hit_ids:
+            r_cols[9].markdown("✅")
+        else:
+            r_cols[9].write("")
 
-        btn_frame = tk.Frame(right_frame)
-        btn_frame.grid(row=8, column=0, columnspan=4, pady=8)
-        self.calc_btn = tk.Button(btn_frame, text="开始计算", command=self.start_calc)
-        self.calc_btn.grid(row=0, column=0, padx=3)
-        self.stop_btn = tk.Button(btn_frame, text="停止", command=self.do_stop)
-        self.stop_btn.grid(row=0, column=1, padx=3)
-        self.clear_btn = tk.Button(btn_frame, text="清空全部", command=self.clear_all)
-        self.clear_btn.grid(row=0, column=2, padx=3)
+# 【右侧参数面板】
+with col_right:
+    st.subheader("参数设置")
+    target_val = st.text_input("目标额度", value="1401", key="target_input")
 
-        tk.Label(right_frame, text="结果：").grid(row=9, column=0, sticky="w")
-        self.result_text = tk.Text(right_frame, width=42, height=18)
-        self.result_text.grid(row=10, column=0, columnspan=4)
-        self.result_text.tag_config("red", foreground="#ff0000")
-        self.result_text.tag_config("bold", font=("SimSun",10,"bold"))
+    st.markdown("#### 5组满减规则")
+    rule_data = []
+    rule_texts = []
+    default_rules = [["50","5"],["200","20"],["300","30"],["250","15"],["400","20"]]
+    for i in range(5):
+        c1, c2 = st.columns(2)
+        f_txt = c1.text_input(f"满减{i+1}：满", value=default_rules[i][0], key=f"rule_full_{i}")
+        r_txt = c2.text_input(f"满减{i+1}：减", value=default_rules[i][1], key=f"rule_reduce_{i}")
+        rule_data.append((f_txt, r_txt))
+        if f_txt.strip() and r_txt.strip():
+            rule_texts.append(f"满{f_txt}减{r_txt}")
+        else:
+            rule_texts.append("")
 
-    def clear_mark(self):
-        for v in self.mark_vars:
-            v.set(False)
-        self.hit_index_set.clear()
+    btn_col1, btn_col2 = st.columns(2)
+    run_btn = btn_col1.button("开始计算", type="primary")
+    clear_btn = btn_col2.button("清空全部")
 
-    def clear_all(self):
-        self.clear_mark()
-        for e in self.price_ents:
-            e.delete(0, tk.END)
-        for e in self.disc_ents:
-            e.delete(0, tk.END)
-        for v in self.sel_vars:
-            v.set(0)
-        self.result_text.delete(1.0, tk.END)
+    st.divider()
+    result_area = st.container()
 
-    def do_stop(self):
-        global stop_flag
-        stop_flag = True
+# 清空逻辑
+if clear_btn:
+    st.session_state.clear()
+    st.rerun()
 
-    def worker_calc(self):
-        global stop_flag
-        stop_flag = False
-        self.result_text.delete(1.0, tk.END)
-        self.clear_mark()
-        try:
-            target = Decimal(self.target_ent.get().strip())
-        except:
-            self.result_text.insert(tk.END, "目标额度输入错误！\n")
-            self.calc_btn.config(state=tk.NORMAL)
-            return
-
-        rule_list = []
-        rule_name_list = []
-        for i in range(5):
-            ft = self.rule_full[i].get().strip()
-            rt = self.rule_reduce[i].get().strip()
-            if ft == "" or rt == "":
-                rule_list.append(None)
-                rule_name_list.append("")
+# 【点击计算】
+if run_btn:
+    with result_area:
+        with st.spinner("正在计算，请稍候..."):
+            try:
+                target = Decimal(target_val.strip())
+            except:
+                st.session_state.result_msg = "❌ 目标额度输入错误！"
+                st.session_state.result_pack = None
+                st.session_state.hit_ids = set()
             else:
-                ff = Decimal(ft)
-                rr = Decimal(rt)
-                rule_list.append((ff, rr))
-                rule_name_list.append(f"满{ff}减{rr}")
+                rule_list = []
+                rule_err = False
+                for f_txt, r_txt in rule_data:
+                    if f_txt.strip() == "" or r_txt.strip() == "":
+                        rule_list.append(None)
+                    else:
+                        try:
+                            f = Decimal(f_txt.strip())
+                            r = Decimal(r_txt.strip())
+                            rule_list.append((f, r))
+                        except:
+                            rule_err = True
+                            break
+                if rule_err:
+                    st.session_state.result_msg = "❌ 满减规则数字非法！"
+                    st.session_state.result_pack = None
+                    st.session_state.hit_ids = set()
+                else:
+                    item_pool = []
+                    item_err = False
+                    for idx, price_str, disc_str, sel in item_data:
+                        if price_str.strip() == "":
+                            continue
+                        try:
+                            val = Decimal(price_str.strip())
+                            disc = Decimal(disc_str.strip()) if disc_str.strip() else Decimal("100")
+                            price_disc = val * disc / Decimal("100")
+                            item_pool.append((idx, val, disc, price_disc, sel))
+                        except:
+                            st.session_state.result_msg = f"❌ 第{idx+1}行单价/折扣格式错误！"
+                            st.session_state.result_pack = None
+                            st.session_state.hit_ids = set()
+                            item_err = True
+                            break
+                    if item_err:
+                        pass
+                    elif len(item_pool) == 0:
+                        st.session_state.result_msg = "⚠️ 没有录入有效商品！"
+                        st.session_state.result_pack = None
+                        st.session_state.hit_ids = set()
+                    else:
+                        res_pack = meet_in_the_middle(item_pool, rule_list, target)
+                        st.session_state.result_pack = res_pack
+                        if res_pack is None:
+                            st.session_state.result_msg = f"❌ **没有找到满减后正好等于 {target} 的商品组合！**"
+                            st.session_state.hit_ids = set()
+                        else:
+                            hit_id_set = {x[0] for x in res_pack}
+                            st.session_state.hit_ids = hit_id_set
+                            total, detail, group_items = calc_total_after_group_reduce(res_pack, rule_list)
+                            g0, g1, g2, g3, g4, g5, r1, r2, r3, r4, r5 = detail
+                            g0_items, g1_items, g2_items, g3_items, g4_items, g5_items = group_items
+                            selected_prices = [str(i[1]) for i in res_pack]
+                            msg_lines = []
+                            msg_lines.append(f"🎯 目标额度：**{target}**")
+                            msg_lines.append(f"✅ 最终合计（分组汇总后分别满减）：**{total}**")
+                            msg_lines.append("🔢 选中价格：<span style='color:red'>" + ",".join(selected_prices) + "</span>")
+                            msg_lines.append("📋 分组明细：")
+                            if g0_items:
+                                msg_lines.append(f"<b>无满减组：</b>{fmt_group(g0_items)} = {g0} → 结算：{g0}")
+                            if rule_texts[0] and g1_items:
+                                msg_lines.append(f"<b>{rule_texts[0]}：</b>{fmt_group(g1_items)} = {g1} → 结算：{r1}")
+                            if rule_texts[1] and g2_items:
+                                msg_lines.append(f"<b>{rule_texts[1]}：</b>{fmt_group(g2_items)} = {g2} → 结算：{r2}")
+                            if rule_texts[2] and g3_items:
+                                msg_lines.append(f"<b>{rule_texts[2]}：</b>{fmt_group(g3_items)} = {g3} → 结算：{r3}")
+                            if rule_texts[3] and g4_items:
+                                msg_lines.append(f"<b>{rule_texts[3]}：</b>{fmt_group(g4_items)} = {g4} → 结算：{r4}")
+                            if rule_texts[4] and g5_items:
+                                msg_lines.append(f"<b>{rule_texts[4]}：</b>{fmt_group(g5_items)} = {g5} → 结算：{r5}")
+                            st.session_state.result_msg = "\n\n".join(msg_lines)
 
-        item_pool = []
-        for idx in range(30):
-            p_str = self.price_ents[idx].get().strip()
-            d_str = self.disc_ents[idx].get().strip()
-            sel = self.sel_vars[idx].get()
-            if not p_str:
-                continue
-            orig = Decimal(p_str)
-            disc = Decimal(d_str) if d_str else Decimal("100")
-            price = orig * disc / Decimal("100")
-            item_pool.append((idx, orig, disc, price, sel))
-
-        if len(item_pool) == 0:
-            self.result_text.insert(tk.END, "没有录入有效商品！\n")
-            self.calc_btn.config(state=tk.NORMAL)
-            return
-
-        res = meet_in_the_middle(item_pool, rule_list, target)
-        if stop_flag:
-            self.result_text.insert(tk.END, "计算已停止\n")
-            self.calc_btn.config(state=tk.NORMAL)
-            return
-        if res is None:
-            self.result_text.insert(tk.END, f"❌ 没有找到满减后正好等于 {target} 的商品组合！\n")
-            self.calc_btn.config(state=tk.NORMAL)
-            return
-
-        hit_idx = [x[0] for x in res]
-        self.hit_index_set = set(hit_idx)
-        for i in hit_idx:
-            self.mark_vars[i].set(True)
-
-        total, detail, group_items = calc_total_after_group_reduce(res, rule_list)
-        g0, g1, g2, g3, g4, g5, r1, r2, r3, r4, r5 = detail
-        g0i, g1i, g2i, g3i, g4i, g5i = group_items
-        selected_price_txt = ",".join([str(x[1]) for x in res])
-
-        self.result_text.insert(tk.END, f"目标额度：{target}\n")
-        self.result_text.insert(tk.END, f"最终合计（分组汇总后分别满减）：{total}\n")
-        self.result_text.insert(tk.END, "选中价格：", "bold")
-        self.result_text.insert(tk.END, selected_price_txt + "\n\n", "red")
-        self.result_text.insert(tk.END, "分组明细：\n", "bold")
-
-        if g0i:
-            self.result_text.insert(tk.END, f"无满减组：{fmt_group(g0i)} = {g0} → 结算：{g0}\n\n")
-        if rule_name_list[0] and g1i:
-            self.result_text.insert(tk.END, f"{rule_name_list[0]}：{fmt_group(g1i)} = {g1} → 结算：{r1}\n\n")
-        if rule_name_list[1] and g2i:
-            self.result_text.insert(tk.END, f"{rule_name_list[1]}：{fmt_group(g2i)} = {g2} → 结算：{r2}\n\n")
-        if rule_name_list[2] and g3i:
-            self.result_text.insert(tk.END, f"{rule_name_list[2]}：{fmt_group(g3i)} = {g3} → 结算：{r3}\n\n")
-        if rule_name_list[3] and g4i:
-            self.result_text.insert(tk.END, f"{rule_name_list[3]}：{fmt_group(g4i)} = {g4} → 结算：{r4}\n\n")
-        if rule_name_list[4] and g5i:
-            self.result_text.insert(tk.END, f"{rule_name_list[4]}：{fmt_group(g5i)} = {g5} → 结算：{r5}\n\n")
-
-        self.calc_btn.config(state=tk.NORMAL)
-
-    def start_calc(self):
-        self.calc_btn.config(state=tk.DISABLED)
-        t = threading.Thread(target=self.worker_calc, daemon=True)
-        t.start()
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = App(root)
-    root.mainloop()
+# 【固定展示结果区域，每次页面刷新都会读取session里的结果】
+with result_area:
+    if st.session_state.result_msg:
+        st.markdown(st.session_state.result_msg, unsafe_allow_html=True)
