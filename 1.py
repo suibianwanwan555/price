@@ -13,20 +13,20 @@ def calc_total_after_group_reduce(selected_items, rule_list):
     g5_items = []
     for idx, orig, disc, price, sel in selected_items:
         if sel == 0:
-            g0_items.append((orig, disc, price))
+            g0_items.append((idx, orig, disc, price))
         elif sel == 1:
-            g1_items.append((orig, disc, price))
+            g1_items.append((idx, orig, disc, price))
         elif sel == 2:
-            g2_items.append((orig, disc, price))
+            g2_items.append((idx, orig, disc, price))
         elif sel == 3:
-            g3_items.append((orig, disc, price))
+            g3_items.append((idx, orig, disc, price))
         elif sel == 4:
-            g4_items.append((orig, disc, price))
+            g4_items.append((idx, orig, disc, price))
         elif sel == 5:
-            g5_items.append((orig, disc, price))
+            g5_items.append((idx, orig, disc, price))
 
     def sum_price(lst):
-        return sum(p for o, d, p in lst)
+        return sum(p for _, o, d, p in lst)
 
     g0_sum = sum_price(g0_items)
     g1_sum = sum_price(g1_items)
@@ -94,7 +94,7 @@ def meet_in_the_middle(item_pool, rule_list, target):
 
 def fmt_group(items):
     parts = []
-    for orig, disc, p in items:
+    for _, orig, disc, p in items:
         if disc == 100:
             parts.append(f"{orig}")
         else:
@@ -109,19 +109,28 @@ if "result_msg" not in st.session_state:
     st.session_state.result_msg = ""
 if "hit_ids" not in st.session_state:
     st.session_state.hit_ids = set()
+# 清空标记：用来切换控件默认值
+if "is_clear" not in st.session_state:
+    st.session_state.is_clear = False
 
 # ===================== 网页界面 =====================
 st.set_page_config(page_title="价格计算（同活动多次满减）", layout="wide")
-st.title("价格计算（同活动只减一次）")
+st.title("价格计算（同活动多次满减）")
 
-test_rows = [
-    (1, 100, "90", 2), (2, 20, "", 1), (3, 30, "", 1), (4, 40, "", 5), (5, 50, "", 1),
-    (6, 60, "", 2), (7, 70, "", 2), (8, 80, "", 2), (9, 90, "", 2), (10,10, "", 1),
-    (11,110,"90",3), (12,125,"88",3), (13,130,"50",3), (14,145,"88",3), (15,155,"88",3),
-    (16,160,"80",0), (17,175,"88",0), (18,180,"80",5), (19,190,"",5), (20,200,"",5),
-    (21,210,"",5), (22,88, "", 0), (23,135,"80",4), (24,220,"85",4), (25,230,"90",3),
-    (26,240,"88",4), (27,250,"82",4), (28,260,"",4), (29,270,"",0), (30,280,"",1),
-]
+# 测试数据，清空开关打开时，全部改为空白
+test_rows = []
+if st.session_state.is_clear:
+    for i in range(30):
+        test_rows.append((i+1, "", "", 0))
+else:
+    test_rows = [
+        (1, 100, "90", 2), (2, 20, "", 1), (3, 30, "", 1), (4, 40, "", 5), (5, 50, "", 1),
+        (6, 60, "", 2), (7, 70, "", 2), (8, 80, "", 2), (9, 90, "", 2), (10,10, "", 1),
+        (11,110,"90",3), (12,125,"88",3), (13,130,"50",3), (14,145,"88",3), (15,155,"88",3),
+        (16,160,"80",0), (17,175,"88",0), (18,180,"80",5), (19,190,"",5), (20,200,"",5),
+        (21,210,"",5), (22,88, "", 0), (23,135,"80",4), (24,220,"85",4), (25,230,"90",3),
+        (26,240,"88",4), (27,250,"82",4), (28,260,"",4), (29,270,"",0), (30,280,"",1),
+    ]
 
 col_left, col_right = st.columns([3.4, 2])
 
@@ -158,7 +167,7 @@ with col_left:
         if sel is None:
             sel = default_sel
         item_data.append( (idx, price_str, disc_str, sel) )
-        # 标记：从session读取
+        # 标记：严格匹配hit_ids
         if idx in st.session_state.hit_ids:
             r_cols[9].markdown("✅")
         else:
@@ -191,12 +200,19 @@ with col_right:
     st.divider()
     result_area = st.container()
 
-# 清空逻辑
+# ========== 清空按钮逻辑 ==========
 if clear_btn:
-    st.session_state.clear()
+    st.session_state.is_clear = True
+    st.session_state.result_pack = None
+    st.session_state.result_msg = ""
+    st.session_state.hit_ids = set()
     st.rerun()
 
-# 【点击计算】
+# 清空完成后，把开关复位，下一次刷新恢复正常
+if st.session_state.is_clear:
+    st.session_state.is_clear = False
+
+# ========== 【点击计算】 ==========
 if run_btn:
     with result_area:
         with st.spinner("正在计算，请稍候..."):
@@ -259,7 +275,11 @@ if run_btn:
                             total, detail, group_items = calc_total_after_group_reduce(res_pack, rule_list)
                             g0, g1, g2, g3, g4, g5, r1, r2, r3, r4, r5 = detail
                             g0_items, g1_items, g2_items, g3_items, g4_items, g5_items = group_items
-                            selected_prices = [str(i[1]) for i in res_pack]
+                            # ✅【重点修复：从hit_ids按顺序取原始价格，保证和✅标记完全一致】
+                            selected_prices = []
+                            for idx, price_str, disc_str, sel in item_data:
+                                if idx in hit_id_set and price_str.strip()!="":
+                                    selected_prices.append(price_str.strip())
                             msg_lines = []
                             msg_lines.append(f"🎯 目标额度：**{target}**")
                             msg_lines.append(f"✅ 最终合计（分组汇总后分别满减）：**{total}**")
@@ -279,7 +299,7 @@ if run_btn:
                                 msg_lines.append(f"<b>{rule_texts[4]}：</b>{fmt_group(g5_items)} = {g5} → 结算：{r5}")
                             st.session_state.result_msg = "\n\n".join(msg_lines)
 
-# 【固定展示结果区域，每次页面刷新都会读取session里的结果】
+# 【固定展示结果区域】
 with result_area:
     if st.session_state.result_msg:
         st.markdown(st.session_state.result_msg, unsafe_allow_html=True)
