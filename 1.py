@@ -3,7 +3,7 @@ import streamlit as st
 
 getcontext().prec = 20
 
-# ===================== 核心计算函数【完全原样保留】 =====================
+# ===================== 核心计算函数【原样保留】 =====================
 def calc_total_after_group_reduce(selected_items, rule_list):
     g0_items = []
     g1_items = []
@@ -102,17 +102,19 @@ def fmt_group(items):
             parts.append(f"[{orig}×{rate_str}={p}]")
     return "+".join(parts)
 
-# ===================== 初始化session状态 =====================
+# ===================== 初始化session =====================
+if "reset_ver" not in st.session_state:
+    st.session_state.reset_ver = 0
 if "result_pack" not in st.session_state:
     st.session_state.result_pack = None
 if "result_msg" not in st.session_state:
     st.session_state.result_msg = ""
 if "hit_ids" not in st.session_state:
     st.session_state.hit_ids = set()
-if "do_clear" not in st.session_state:
-    st.session_state.do_clear = False
 
-# ===================== 网页界面 =====================
+# 读取重置版本号
+ver = st.session_state.reset_ver
+
 st.set_page_config(page_title="价格计算（同活动多次满减）", layout="wide")
 st.title("价格计算（同活动只减一次）")
 
@@ -145,39 +147,35 @@ with col_left:
     st.divider()
 
     for idx in range(30):
-        seq, default_price, default_disc, default_sel = test_rows[idx]
-        # 清空标记打开：全部默认空白、单选默认0（无满减）
-        if st.session_state.do_clear:
-            default_price = ""
-            default_disc = ""
-            default_sel = 0
+        seq, _, _, _ = test_rows[idx]
         r_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6])
         r_cols[0].write(f"{seq:02d}")
-        price_str = r_cols[1].text_input("", value=default_price, key=f"p_{idx}", label_visibility="collapsed")
-        disc_str = r_cols[2].text_input("", value=default_disc, key=f"d_{idx}", label_visibility="collapsed")
+        # key拼接版本号，清空时版本+1，控件全新
+        price_str = r_cols[1].text_input("", value="", key=f"p_{ver}_{idx}", label_visibility="collapsed")
+        disc_str = r_cols[2].text_input("", value="", key=f"d_{ver}_{idx}", label_visibility="collapsed")
 
-        sel0 = r_cols[3].radio("", options=[0], index=0 if default_sel == 0 else None, key=f"sel0_{idx}", label_visibility="collapsed")
-        sel1 = r_cols[4].radio("", options=[1], index=0 if default_sel == 1 else None, key=f"sel1_{idx}", label_visibility="collapsed")
-        sel2 = r_cols[5].radio("", options=[2], index=0 if default_sel == 2 else None, key=f"sel2_{idx}", label_visibility="collapsed")
-        sel3 = r_cols[6].radio("", options=[3], index=0 if default_sel == 3 else None, key=f"sel3_{idx}", label_visibility="collapsed")
-        sel4 = r_cols[7].radio("", options=[4], index=0 if default_sel == 4 else None, key=f"sel4_{idx}", label_visibility="collapsed")
-        sel5 = r_cols[8].radio("", options=[5], index=0 if default_sel == 5 else None, key=f"sel5_{idx}", label_visibility="collapsed")
+        sel0 = r_cols[3].radio("", options=[0], index=0, key=f"sel0_{ver}_{idx}", label_visibility="collapsed")
+        sel1 = r_cols[4].radio("", options=[1], index=None, key=f"sel1_{ver}_{idx}", label_visibility="collapsed")
+        sel2 = r_cols[5].radio("", options=[2], index=None, key=f"sel2_{ver}_{idx}", label_visibility="collapsed")
+        sel3 = r_cols[6].radio("", options=[3], index=None, key=f"sel3_{ver}_{idx}", label_visibility="collapsed")
+        sel4 = r_cols[7].radio("", options=[4], index=None, key=f"sel4_{ver}_{idx}", label_visibility="collapsed")
+        sel5 = r_cols[8].radio("", options=[5], index=None, key=f"sel5_{ver}_{idx}", label_visibility="collapsed")
 
         # 判断选中
-        if st.session_state.get(f"sel0_{idx}") == 0:
+        if st.session_state.get(f"sel0_{ver}_{idx}") == 0:
             final_sel = 0
-        elif st.session_state.get(f"sel1_{idx}") == 1:
+        elif st.session_state.get(f"sel1_{ver}_{idx}") == 1:
             final_sel = 1
-        elif st.session_state.get(f"sel2_{idx}") == 2:
+        elif st.session_state.get(f"sel2_{ver}_{idx}") == 2:
             final_sel = 2
-        elif st.session_state.get(f"sel3_{idx}") == 3:
+        elif st.session_state.get(f"sel3_{ver}_{idx}") == 3:
             final_sel = 3
-        elif st.session_state.get(f"sel4_{idx}") == 4:
+        elif st.session_state.get(f"sel4_{ver}_{idx}") == 4:
             final_sel = 4
-        elif st.session_state.get(f"sel5_{idx}") == 5:
+        elif st.session_state.get(f"sel5_{ver}_{idx}") == 5:
             final_sel = 5
         else:
-            final_sel = default_sel
+            final_sel = 0
 
         item_data.append( (idx, price_str, disc_str, final_sel) )
         if idx in st.session_state.hit_ids:
@@ -188,19 +186,15 @@ with col_left:
 # 【右侧参数面板】
 with col_right:
     st.subheader("参数设置")
-    target_default = "" if st.session_state.do_clear else "1401"
-    target_val = st.text_input("目标额度", value=target_default, key="target_input")
+    target_val = st.text_input("目标额度", value="", key=f"target_{ver}")
 
     st.markdown("#### 5组满减规则")
     rule_data = []
     rule_texts = []
-    default_rules = [["50","5"],["200","20"],["300","30"],["250","15"],["400","20"]]
     for i in range(5):
         c1, c2 = st.columns(2)
-        f_val = "" if st.session_state.do_clear else default_rules[i][0]
-        r_val = "" if st.session_state.do_clear else default_rules[i][1]
-        f_txt = c1.text_input(f"满减{i+1}：满", value=f_val, key=f"rule_full_{i}")
-        r_txt = c2.text_input(f"满减{i+1}：减", value=r_val, key=f"rule_reduce_{i}")
+        f_txt = c1.text_input(f"满减{i+1}：满", value="", key=f"rule_full_{ver}_{i}")
+        r_txt = c2.text_input(f"满减{i+1}：减", value="", key=f"rule_reduce_{ver}_{i}")
         rule_data.append((f_txt, r_txt))
         if f_txt.strip() and r_txt.strip():
             rule_texts.append(f"满{f_txt}减{r_txt}")
@@ -214,44 +208,13 @@ with col_right:
     st.divider()
     result_area = st.container()
 
-# ========== 【清空全部逻辑 - 重点修改这里】 ==========
+# ========== 【清空逻辑】 ==========
 if clear_btn:
-    # 清空结果标记
+    st.session_state.reset_ver += 1
     st.session_state.result_pack = None
     st.session_state.result_msg = ""
     st.session_state.hit_ids = set()
-
-    # 删除所有控件key，强制重置
-    for idx in range(30):
-        if f"p_{idx}" in st.session_state:
-            del st.session_state[f"p_{idx}"]
-        if f"d_{idx}" in st.session_state:
-            del st.session_state[f"d_{idx}"]
-        if f"sel0_{idx}" in st.session_state:
-            del st.session_state[f"sel0_{idx}"]
-        if f"sel1_{idx}" in st.session_state:
-            del st.session_state[f"sel1_{idx}"]
-        if f"sel2_{idx}" in st.session_state:
-            del st.session_state[f"sel2_{idx}"]
-        if f"sel3_{idx}" in st.session_state:
-            del st.session_state[f"sel3_{idx}"]
-        if f"sel4_{idx}" in st.session_state:
-            del st.session_state[f"sel4_{idx}"]
-        if f"sel5_{idx}" in st.session_state:
-            del st.session_state[f"sel5_{idx}"]
-    for i in range(5):
-        if f"rule_full_{i}" in st.session_state:
-            del st.session_state[f"rule_full_{i}"]
-        if f"rule_reduce_{i}" in st.session_state:
-            del st.session_state[f"rule_reduce_{i}"]
-    if "target_input" in st.session_state:
-        del st.session_state["target_input"]
-
-    # 打开清空开关
-    st.session_state.do_clear = True
     st.rerun()
-else:
-    st.session_state.do_clear = False
 
 # 【点击计算】
 if run_btn:
