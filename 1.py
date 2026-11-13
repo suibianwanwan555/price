@@ -3,7 +3,7 @@ import streamlit as st
 
 getcontext().prec = 20
 
-# ===================== 核心计算函数（原样保留） =====================
+# ===================== 核心计算函数【完全原样保留】 =====================
 def calc_total_after_group_reduce(selected_items, rule_list):
     g0_items = []
     g1_items = []
@@ -150,17 +150,31 @@ with col_left:
         price_str = r_cols[1].text_input("", value=default_price, key=f"p_{idx}", label_visibility="collapsed")
         disc_str = r_cols[2].text_input("", value=default_disc, key=f"d_{idx}", label_visibility="collapsed")
 
-        # ✅ 重点：垂直单选，放在【无满减】这一列，和表头对齐！
-        sel = r_cols[3].radio(
-            "",
-            options=[0,1,2,3,4,5],
-            index=default_sel,
-            horizontal=False,
-            key=f"sel_{idx}",
-            label_visibility="collapsed"
-        )
+        # ========== 重点修改：横向单选，每一列对应一个选项 ==========
+        sel = r_cols[3].radio("", options=[0], index=0 if default_sel == 0 else None, key=f"sel0_{idx}", label_visibility="collapsed")
+        sel = r_cols[4].radio("", options=[1], index=0 if default_sel == 1 else None, key=f"sel1_{idx}", label_visibility="collapsed")
+        sel = r_cols[5].radio("", options=[2], index=0 if default_sel == 2 else None, key=f"sel2_{idx}", label_visibility="collapsed")
+        sel = r_cols[6].radio("", options=[3], index=0 if default_sel == 3 else None, key=f"sel3_{idx}", label_visibility="collapsed")
+        sel = r_cols[7].radio("", options=[4], index=0 if default_sel == 4 else None, key=f"sel4_{idx}", label_visibility="collapsed")
+        sel = r_cols[8].radio("", options=[5], index=0 if default_sel == 5 else None, key=f"sel5_{idx}", label_visibility="collapsed")
 
-        item_data.append( (idx, price_str, disc_str, sel) )
+        # 读取当前选中值
+        if st.session_state.get(f"sel0_{idx}") == 0:
+            final_sel = 0
+        elif st.session_state.get(f"sel1_{idx}") == 1:
+            final_sel = 1
+        elif st.session_state.get(f"sel2_{idx}") == 2:
+            final_sel = 2
+        elif st.session_state.get(f"sel3_{idx}") == 3:
+            final_sel = 3
+        elif st.session_state.get(f"sel4_{idx}") == 4:
+            final_sel = 4
+        elif st.session_state.get(f"sel5_{idx}") == 5:
+            final_sel = 5
+        else:
+            final_sel = default_sel
+
+        item_data.append( (idx, price_str, disc_str, final_sel) )
         # 标记渲染
         if idx in st.session_state.hit_ids:
             r_cols[9].markdown("✅")
