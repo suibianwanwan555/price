@@ -102,6 +102,18 @@ def fmt_group(items):
             parts.append(f"[{orig}×{rate_str}={p}]")
     return "+".join(parts)
 
+# ===================== 测试数据定义 =====================
+test_rows = [
+    (1, "100", "90", 2), (2, "20", "", 1), (3, "30", "", 1), (4, "40", "", 5), (5, "50", "", 1),
+    (6, "60", "", 2), (7, "70", "", 2), (8, "80", "", 2), (9, "90", "", 2), (10, "10", "", 1),
+    (11, "110", "90", 3), (12, "125", "88", 3), (13, "130", "50", 3), (14, "145", "88", 3), (15, "155", "88", 3),
+    (16, "160", "80", 0), (17, "175", "88", 0), (18, "180", "80", 5), (19, "190", "", 5), (20, "200", "", 5),
+    (21, "210", "", 5), (22, "88", "", 0), (23, "135", "80", 4), (24, "220", "85", 4), (25, "230", "90", 3),
+    (26, "240", "88", 4), (27, "250", "82", 4), (28, "260", "", 4), (29, "270", "", 0), (30, "280", "", 1),
+]
+test_target = "1401"
+test_rules = [["50","5"],["200","20"],["300","30"],["250","15"],["400","20"]]
+
 # ===================== 初始化session =====================
 if "reset_ver" not in st.session_state:
     st.session_state.reset_ver = 0
@@ -112,20 +124,12 @@ if "result_msg" not in st.session_state:
 if "hit_ids" not in st.session_state:
     st.session_state.hit_ids = set()
 
-# 读取重置版本号
 ver = st.session_state.reset_ver
+# 版本0 = 第一次打开，加载测试数据；ver>=1 是清空过，全部空白
+is_first = (ver == 0)
 
 st.set_page_config(page_title="价格计算（同活动多次满减）", layout="wide")
 st.title("价格计算（同活动只减一次）")
-
-test_rows = [
-    (1, 100, "90", 2), (2, 20, "", 1), (3, 30, "", 1), (4, 40, "", 5), (5, 50, "", 1),
-    (6, 60, "", 2), (7, 70, "", 2), (8, 80, "", 2), (9, 90, "", 2), (10,10, "", 1),
-    (11,110,"90",3), (12,125,"88",3), (13,130,"50",3), (14,145,"88",3), (15,155,"88",3),
-    (16,160,"80",0), (17,175,"88",0), (18,180,"80",5), (19,190,"",5), (20,200,"",5),
-    (21,210,"",5), (22,88, "", 0), (23,135,"80",4), (24,220,"85",4), (25,230,"90",3),
-    (26,240,"88",4), (27,250,"82",4), (28,260,"",4), (29,270,"",0), (30,280,"",1),
-]
 
 col_left, col_right = st.columns([3.4, 2])
 
@@ -147,19 +151,37 @@ with col_left:
     st.divider()
 
     for idx in range(30):
-        seq, _, _, _ = test_rows[idx]
+        seq, p_def, d_def, sel_def = test_rows[idx]
         r_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6])
         r_cols[0].write(f"{seq:02d}")
-        # key拼接版本号，清空时版本+1，控件全新
-        price_str = r_cols[1].text_input("", value="", key=f"p_{ver}_{idx}", label_visibility="collapsed")
-        disc_str = r_cols[2].text_input("", value="", key=f"d_{ver}_{idx}", label_visibility="collapsed")
+        # 只有首次打开才填入测试数据
+        pv = p_def if is_first else ""
+        dv = d_def if is_first else ""
+        price_str = r_cols[1].text_input("", value=pv, key=f"p_{ver}_{idx}", label_visibility="collapsed")
+        disc_str = r_cols[2].text_input("", value=dv, key=f"d_{ver}_{idx}", label_visibility="collapsed")
 
-        sel0 = r_cols[3].radio("", options=[0], index=0, key=f"sel0_{ver}_{idx}", label_visibility="collapsed")
-        sel1 = r_cols[4].radio("", options=[1], index=None, key=f"sel1_{ver}_{idx}", label_visibility="collapsed")
-        sel2 = r_cols[5].radio("", options=[2], index=None, key=f"sel2_{ver}_{idx}", label_visibility="collapsed")
-        sel3 = r_cols[6].radio("", options=[3], index=None, key=f"sel3_{ver}_{idx}", label_visibility="collapsed")
-        sel4 = r_cols[7].radio("", options=[4], index=None, key=f"sel4_{ver}_{idx}", label_visibility="collapsed")
-        sel5 = r_cols[8].radio("", options=[5], index=None, key=f"sel5_{ver}_{idx}", label_visibility="collapsed")
+        # 单选默认值：首次打开用测试的sel_def，清空后默认0（无满减）
+        if is_first:
+            idx0 = 0 if sel_def == 0 else None
+            idx1 = 0 if sel_def == 1 else None
+            idx2 = 0 if sel_def == 2 else None
+            idx3 = 0 if sel_def == 3 else None
+            idx4 = 0 if sel_def == 4 else None
+            idx5 = 0 if sel_def == 5 else None
+        else:
+            idx0 = 0
+            idx1 = None
+            idx2 = None
+            idx3 = None
+            idx4 = None
+            idx5 = None
+
+        sel0 = r_cols[3].radio("", options=[0], index=idx0, key=f"sel0_{ver}_{idx}", label_visibility="collapsed")
+        sel1 = r_cols[4].radio("", options=[1], index=idx1, key=f"sel1_{ver}_{idx}", label_visibility="collapsed")
+        sel2 = r_cols[5].radio("", options=[2], index=idx2, key=f"sel2_{ver}_{idx}", label_visibility="collapsed")
+        sel3 = r_cols[6].radio("", options=[3], index=idx3, key=f"sel3_{ver}_{idx}", label_visibility="collapsed")
+        sel4 = r_cols[7].radio("", options=[4], index=idx4, key=f"sel4_{ver}_{idx}", label_visibility="collapsed")
+        sel5 = r_cols[8].radio("", options=[5], index=idx5, key=f"sel5_{ver}_{idx}", label_visibility="collapsed")
 
         # 判断选中
         if st.session_state.get(f"sel0_{ver}_{idx}") == 0:
@@ -186,15 +208,19 @@ with col_left:
 # 【右侧参数面板】
 with col_right:
     st.subheader("参数设置")
-    target_val = st.text_input("目标额度", value="", key=f"target_{ver}")
+    target_default = test_target if is_first else ""
+    target_val = st.text_input("目标额度", value=target_default, key=f"target_{ver}")
 
     st.markdown("#### 5组满减规则")
     rule_data = []
     rule_texts = []
     for i in range(5):
         c1, c2 = st.columns(2)
-        f_txt = c1.text_input(f"满减{i+1}：满", value="", key=f"rule_full_{ver}_{i}")
-        r_txt = c2.text_input(f"满减{i+1}：减", value="", key=f"rule_reduce_{ver}_{i}")
+        f_def, r_def = test_rules[i]
+        fv = f_def if is_first else ""
+        rv = r_def if is_first else ""
+        f_txt = c1.text_input(f"满减{i+1}：满", value=fv, key=f"rule_full_{ver}_{i}")
+        r_txt = c2.text_input(f"满减{i+1}：减", value=rv, key=f"rule_reduce_{ver}_{i}")
         rule_data.append((f_txt, r_txt))
         if f_txt.strip() and r_txt.strip():
             rule_texts.append(f"满{f_txt}减{r_txt}")
