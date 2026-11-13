@@ -35,17 +35,20 @@ def calc_total_after_group_reduce(selected_items, rule_list):
     g4_sum = sum_price(g4_items)
     g5_sum = sum_price(g5_items)
 
-    def apply_rule_multi(sum_val, rule):
-        f, r = rule
-        if f is None or r is None or f <= 0 or r <= 0:
-            return sum_val
-        cnt = int(sum_val // f)
-        return sum_val - cnt * r
-    r1 = apply_rule_multi(g1_sum, rule_list[0])
-    r2 = apply_rule_multi(g2_sum, rule_list[1])
-    r3 = apply_rule_multi(g3_sum, rule_list[2])
-    r4 = apply_rule_multi(g4_sum, rule_list[3])
-    r5 = apply_rule_multi(g5_sum, rule_list[4])
+    def apply_rule(total, rule):
+        if rule is None:
+            return total
+        full, reduce_val = rule
+        if full <= 0:
+            return total
+        cnt = int(total // full)
+        return total - cnt * reduce_val
+
+    r1 = apply_rule(g1_sum, rule_list[0])
+    r2 = apply_rule(g2_sum, rule_list[1])
+    r3 = apply_rule(g3_sum, rule_list[2])
+    r4 = apply_rule(g4_sum, rule_list[3])
+    r5 = apply_rule(g5_sum, rule_list[4])
     total = g0_sum + r1 + r2 + r3 + r4 + r5
     return total, (g0_sum, g1_sum, g2_sum, g3_sum, g4_sum, g5_sum, r1, r2, r3, r4, r5), (g0_items, g1_items, g2_items, g3_items, g4_items, g5_items)
 
@@ -56,8 +59,8 @@ def meet_in_the_middle(item_pool, rule_list, target):
     if n == 0:
         return None
     mid = n // 2
-    left = item_pool_sorted[:mid]
-    right = item_pool_sorted[mid:]
+    left_arr = item_pool_sorted[:mid]
+    right_arr = item_pool_sorted[mid:]
 
     def gen_subset(arr):
         res = []
@@ -71,8 +74,8 @@ def meet_in_the_middle(item_pool, rule_list, target):
             res.append((sum_final, pack))
         return res
 
-    sub_left = gen_subset(left)
-    sub_right = gen_subset(right)
+    sub_left = gen_subset(left_arr)
+    sub_right = gen_subset(right_arr)
 
     right_dict = {}
     for s_r, pack_r in sub_right:
@@ -118,7 +121,7 @@ col_left, col_right = st.columns([3, 2])
 
 with col_right:
     st.subheader("参数设置")
-    target_val = st.text_input("目标额度", value="1401")
+    target_val = st.text_input("目标额度", value="1401", key="target_input")
 
     st.markdown("#### 5组满减规则")
     rule_data = []
@@ -126,8 +129,8 @@ with col_right:
     default_rules = [["50","5"],["200","20"],["300","30"],["250","15"],["400","20"]]
     for i in range(5):
         c1, c2 = st.columns(2)
-        f_txt = c1.text_input(f"满减{i+1}：满", value=default_rules[i][0])
-        r_txt = c2.text_input(f"减", value=default_rules[i][1])
+        f_txt = c1.text_input(f"满减{i+1}：满", value=default_rules[i][0], key=f"rule_full_{i}")
+        r_txt = c2.text_input(f"满减{i+1}：减", value=default_rules[i][1], key=f"rule_reduce_{i}")
         rule_data.append((f_txt, r_txt))
         if f_txt.strip() and r_txt.strip():
             rule_texts.append(f"满{f_txt}减{r_txt}")
@@ -164,7 +167,7 @@ if run_btn:
     rule_list = []
     for f_txt, r_txt in rule_data:
         if f_txt.strip() == "" or r_txt.strip() == "":
-            rule_list.append((None, None))
+            rule_list.append(None)
         else:
             try:
                 f = Decimal(f_txt.strip())
@@ -191,7 +194,7 @@ if run_btn:
 
     if len(item_pool) == 0:
         with result_area:
-            st.warning("没有录入商品！")
+            st.warning("没有录入有效商品！")
         st.stop()
 
     res_pack = meet_in_the_middle(item_pool, rule_list, target)
@@ -199,7 +202,7 @@ if run_btn:
         if res_pack is None:
             st.markdown(f"❌ **没有找到满减后正好等于 {target} 的商品组合！**")
         else:
-            selected_prices = [str(item[1]) for item in res_pack]
+            selected_prices = [str(i[1]) for i in res_pack]
             total, detail, group_items = calc_total_after_group_reduce(res_pack, rule_list)
             g0, g1, g2, g3, g4, g5, r1, r2, r3, r4, r5 = detail
             g0_items, g1_items, g2_items, g3_items, g4_items, g5_items = group_items
