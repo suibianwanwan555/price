@@ -294,6 +294,8 @@ if run_btn:
                             if rule_texts[4] and g5_items:
                                 msg_lines.append(f"<b>{rule_texts[4]}：</b>{fmt_group(g5_items)} = {g5} → 结算：{r5}")
                             st.session_state.result_msg = "\n\n".join(msg_lines)
+                            # 新增这一行：状态更新完成后自动刷新页面，一次点击就出标记
+                            st.rerun()
 
 # 【固定展示结果区域】
 with result_area:
