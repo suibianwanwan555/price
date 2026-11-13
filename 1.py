@@ -249,12 +249,13 @@ if run_btn:
                     if f_txt.strip() == "" or r_txt.strip() == "":
                         rule_list.append(None)
                     else:
+                        try:
                             f = Decimal(f_txt.strip())
                             r = Decimal(r_txt.strip())
                             rule_list.append((f, r))
-                    except:
-                        rule_err = True
-                        break
+                        except:
+                            rule_err = True
+                            break
                 if rule_err:
                     st.session_state.result_msg = "❌ 满减规则数字非法！"
                     st.session_state.result_pack = None
