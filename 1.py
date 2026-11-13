@@ -53,13 +53,13 @@ def calc_total_after_group_reduce(selected_items, rule_list):
     return total, (g0_sum, g1_sum, g2_sum, g3_sum, g4_sum, g5_sum, r1, r2, r3, r4, r5), (g0_items, g1_items, g2_items, g3_items, g4_items, g5_items)
 
 def meet_in_the_middle(item_pool, rule_list, target):
-    # ========= 重点修改：删除排序！按原始顺序对半切，行号不会乱 =========
-    n = len(item_pool)
+    item_pool_sorted = sorted(item_pool, key=lambda x: x[0])
+    n = len(item_pool_sorted)
     if n == 0:
         return None
     mid = n // 2
-    left_arr = item_pool[:mid]
-    right_arr = item_pool[mid:]
+    left_arr = item_pool_sorted[:mid]
+    right_arr = item_pool_sorted[mid:]
 
     def gen_subset(arr):
         res = []
@@ -150,15 +150,29 @@ with col_left:
         price_str = r_cols[1].text_input("", value=default_price, key=f"p_{idx}", label_visibility="collapsed")
         disc_str = r_cols[2].text_input("", value=default_disc, key=f"d_{idx}", label_visibility="collapsed")
 
-        # ========= 修复单选：一行一个横向单选，不再拆分6个radio，状态不会错乱 =========
-        final_sel = r_cols[3].radio(
-            "",
-            options=[0,1,2,3,4,5],
-            index=default_sel,
-            horizontal=True,
-            key=f"sel_{idx}",
-            label_visibility="collapsed"
-        )
+        # ========== 重点修改：横向单选，每一列对应一个选项 ==========
+        sel = r_cols[3].radio("", options=[0], index=0 if default_sel == 0 else None, key=f"sel0_{idx}", label_visibility="collapsed")
+        sel = r_cols[4].radio("", options=[1], index=0 if default_sel == 1 else None, key=f"sel1_{idx}", label_visibility="collapsed")
+        sel = r_cols[5].radio("", options=[2], index=0 if default_sel == 2 else None, key=f"sel2_{idx}", label_visibility="collapsed")
+        sel = r_cols[6].radio("", options=[3], index=0 if default_sel == 3 else None, key=f"sel3_{idx}", label_visibility="collapsed")
+        sel = r_cols[7].radio("", options=[4], index=0 if default_sel == 4 else None, key=f"sel4_{idx}", label_visibility="collapsed")
+        sel = r_cols[8].radio("", options=[5], index=0 if default_sel == 5 else None, key=f"sel5_{idx}", label_visibility="collapsed")
+
+        # 读取当前选中值
+        if st.session_state.get(f"sel0_{idx}") == 0:
+            final_sel = 0
+        elif st.session_state.get(f"sel1_{idx}") == 1:
+            final_sel = 1
+        elif st.session_state.get(f"sel2_{idx}") == 2:
+            final_sel = 2
+        elif st.session_state.get(f"sel3_{idx}") == 3:
+            final_sel = 3
+        elif st.session_state.get(f"sel4_{idx}") == 4:
+            final_sel = 4
+        elif st.session_state.get(f"sel5_{idx}") == 5:
+            final_sel = 5
+        else:
+            final_sel = default_sel
 
         item_data.append( (idx, price_str, disc_str, final_sel) )
         # 标记渲染
