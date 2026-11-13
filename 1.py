@@ -3,7 +3,7 @@ import streamlit as st
 
 getcontext().prec = 20
 
-# ===================== 核心计算函数（完全原样保留，没有改动） =====================
+# ===================== 核心计算函数（原样保留） =====================
 def calc_total_after_group_reduce(selected_items, rule_list):
     g0_items = []
     g1_items = []
@@ -129,6 +129,7 @@ col_left, col_right = st.columns([3.4, 2])
 item_data = []
 with col_left:
     st.subheader("商品列表（共30条）")
+    # 表头：序号｜单价｜折扣｜无满减｜满减1｜满减2｜满减3｜满减4｜满减5｜标记
     h_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6])
     h_cols[0].write("序号")
     h_cols[1].write("单价")
@@ -149,18 +150,18 @@ with col_left:
         price_str = r_cols[1].text_input("", value=default_price, key=f"p_{idx}", label_visibility="collapsed")
         disc_str = r_cols[2].text_input("", value=default_disc, key=f"d_{idx}", label_visibility="collapsed")
 
-        # ========== 修复重点：一行只用1个radio，6个选项互斥 ==========
+        # ✅ 重点：垂直单选，放在【无满减】这一列，和表头对齐！
         sel = r_cols[3].radio(
             "",
             options=[0,1,2,3,4,5],
             index=default_sel,
-            horizontal=True,
+            horizontal=False,
             key=f"sel_{idx}",
             label_visibility="collapsed"
         )
 
         item_data.append( (idx, price_str, disc_str, sel) )
-        # 标记：从session读取
+        # 标记渲染
         if idx in st.session_state.hit_ids:
             r_cols[9].markdown("✅")
         else:
@@ -280,7 +281,7 @@ if run_btn:
                                 msg_lines.append(f"<b>{rule_texts[4]}：</b>{fmt_group(g5_items)} = {g5} → 结算：{r5}")
                             st.session_state.result_msg = "\n\n".join(msg_lines)
 
-# 【固定展示结果区域，每次页面刷新都会读取session里的结果】
+# 【固定展示结果区域】
 with result_area:
     if st.session_state.result_msg:
         st.markdown(st.session_state.result_msg, unsafe_allow_html=True)
