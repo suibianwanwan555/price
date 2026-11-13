@@ -126,7 +126,7 @@ if "hit_ids" not in st.session_state:
 
 ver = st.session_state.reset_ver
 # 版本0 = 第一次打开，加载测试数据；ver>=1 是清空过，全部空白
-is_first  = False
+is_first = (ver == 0)
 
 st.set_page_config(page_title="价格计算（同活动多次满减）", layout="wide")
 st.title("价格计算（同活动只减一次）")
