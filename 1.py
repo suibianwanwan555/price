@@ -117,7 +117,47 @@ test_rows = [
 
 col_left, col_right = st.columns([3.4, 2])
 
-# 右侧面板
+# 【第一步：先渲染左侧商品列表，生成item_data！】
+hit_id_set = set()
+item_data = []
+with col_left:
+    st.subheader("商品列表（共30条）")
+    h_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6])
+    h_cols[0].write("序号")
+    h_cols[1].write("单价")
+    h_cols[2].write("折扣")
+    h_cols[3].write("无满减")
+    h_cols[4].write("满减1")
+    h_cols[5].write("满减2")
+    h_cols[6].write("满减3")
+    h_cols[7].write("满减4")
+    h_cols[8].write("满减5")
+    h_cols[9].write("标记")
+    st.divider()
+
+    for idx in range(30):
+        seq, default_price, default_disc, default_sel = test_rows[idx]
+        r_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6])
+        r_cols[0].write(f"{seq:02d}")
+        price_str = r_cols[1].text_input("", value=default_price, key=f"p_{idx}", label_visibility="collapsed")
+        disc_str = r_cols[2].text_input("", value=default_disc, key=f"d_{idx}", label_visibility="collapsed")
+        sel = None
+        options = [0,1,2,3,4,5]
+        keys_radio = [f"sel_{idx}_0",f"sel_{idx}_1",f"sel_{idx}_2",f"sel_{idx}_3",f"sel_{idx}_4",f"sel_{idx}_5"]
+        for opt_i, opt_val in enumerate(options):
+            if r_cols[3 + opt_i].radio("", [opt_val], index=0 if default_sel==opt_val else None, key=keys_radio[opt_i], label_visibility="collapsed") is not None:
+                sel = opt_val
+        if sel is None:
+            sel = default_sel
+        item_data.append( (idx, price_str, disc_str, sel) )
+        # 标记显示
+        if idx in hit_id_set:
+            r_cols[9].markdown("✅")
+        else:
+            r_cols[9].write("")
+
+
+# 【第二步：右侧参数面板】
 with col_right:
     st.subheader("参数设置")
     target_val = st.text_input("目标额度", value="1401", key="target_input")
@@ -136,7 +176,6 @@ with col_right:
         else:
             rule_texts.append("")
 
-    # 按钮行：开始计算 + 清空全部
     btn_col1, btn_col2 = st.columns(2)
     run_btn = btn_col1.button("开始计算", type="primary")
     clear_btn = btn_col2.button("清空全部")
@@ -144,13 +183,12 @@ with col_right:
     st.divider()
     result_area = st.container()
 
-# 清空逻辑：清空所有session_state，页面刷新重置
+# 清空逻辑
 if clear_btn:
     st.session_state.clear()
     st.rerun()
 
-# 左侧商品列表
-hit_id_set = set()
+# 【第三步：计算逻辑（此时item_data已经存在）】
 if run_btn:
     try:
         target = Decimal(target_val.strip())
@@ -195,6 +233,8 @@ if run_btn:
     res_pack = meet_in_the_middle(item_pool, rule_list, target)
     if res_pack is not None:
         hit_id_set = {x[0] for x in res_pack}
+        # 强制刷新页面，渲染✅标记
+        st.rerun()
 
     with result_area:
         if res_pack is None:
@@ -227,41 +267,3 @@ if run_btn:
             if rule_texts[4] and g5_items:
                 st.markdown(f"<b>{rule_texts[4]}：</b>{fmt_group(g5_items)} = {g5} → 结算：{r5}", unsafe_allow_html=True)
                 st.write("")
-
-with col_left:
-    st.subheader("商品列表（共30条）")
-    # 表头增加【标记】列
-    h_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6])
-    h_cols[0].write("序号")
-    h_cols[1].write("单价")
-    h_cols[2].write("折扣")
-    h_cols[3].write("无满减")
-    h_cols[4].write("满减1")
-    h_cols[5].write("满减2")
-    h_cols[6].write("满减3")
-    h_cols[7].write("满减4")
-    h_cols[8].write("满减5")
-    h_cols[9].write("标记")
-    st.divider()
-
-    item_data = []
-    for idx in range(30):
-        seq, default_price, default_disc, default_sel = test_rows[idx]
-        r_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6])
-        r_cols[0].write(f"{seq:02d}")
-        price_str = r_cols[1].text_input("", value=default_price, key=f"p_{idx}", label_visibility="collapsed")
-        disc_str = r_cols[2].text_input("", value=default_disc, key=f"d_{idx}", label_visibility="collapsed")
-        sel = None
-        options = [0,1,2,3,4,5]
-        keys_radio = [f"sel_{idx}_0",f"sel_{idx}_1",f"sel_{idx}_2",f"sel_{idx}_3",f"sel_{idx}_4",f"sel_{idx}_5"]
-        for opt_i, opt_val in enumerate(options):
-            if r_cols[3 + opt_i].radio("", [opt_val], index=0 if default_sel==opt_val else None, key=keys_radio[opt_i], label_visibility="collapsed") is not None:
-                sel = opt_val
-        if sel is None:
-            sel = default_sel
-        item_data.append( (idx, price_str, disc_str, sel) )
-        # 标记列：命中就打✅
-        if idx in hit_id_set:
-            r_cols[9].markdown("✅")
-        else:
-            r_cols[9].write("")
