@@ -110,6 +110,10 @@ if "result_msg" not in st.session_state:
 if "hit_ids" not in st.session_state:
     st.session_state.hit_ids = set()
 
+# 【新增标记：清空开关】
+if "do_clear" not in st.session_state:
+    st.session_state.do_clear = False
+
 # ===================== 网页界面 =====================
 st.set_page_config(page_title="价格计算（同活动多次满减）", layout="wide")
 st.title("价格计算（同活动只减一次）")
@@ -145,6 +149,11 @@ with col_left:
 
     for idx in range(30):
         seq, default_price, default_disc, default_sel = test_rows[idx]
+        # 如果触发清空，默认值改为空白、单选默认0（无满减）
+        if st.session_state.do_clear:
+            default_price = ""
+            default_disc = ""
+            default_sel = 0
         r_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6])
         r_cols[0].write(f"{seq:02d}")
         price_str = r_cols[1].text_input("", value=default_price, key=f"p_{idx}", label_visibility="collapsed")
@@ -192,8 +201,11 @@ with col_right:
     default_rules = [["50","5"],["200","20"],["300","30"],["250","15"],["400","20"]]
     for i in range(5):
         c1, c2 = st.columns(2)
-        f_txt = c1.text_input(f"满减{i+1}：满", value=default_rules[i][0], key=f"rule_full_{i}")
-        r_txt = c2.text_input(f"满减{i+1}：减", value=default_rules[i][1], key=f"rule_reduce_{i}")
+        # 清空触发时，满减输入框默认空白
+        f_val = "" if st.session_state.do_clear else default_rules[i][0]
+        r_val = "" if st.session_state.do_clear else default_rules[i][1]
+        f_txt = c1.text_input(f"满减{i+1}：满", value=f_val, key=f"rule_full_{i}")
+        r_txt = c2.text_input(f"满减{i+1}：减", value=r_val, key=f"rule_reduce_{i}")
         rule_data.append((f_txt, r_txt))
         if f_txt.strip() and r_txt.strip():
             rule_texts.append(f"满{f_txt}减{r_txt}")
@@ -207,10 +219,18 @@ with col_right:
     st.divider()
     result_area = st.container()
 
-# 清空逻辑
+# ========== 【这里只修改清空全部逻辑】 ==========
 if clear_btn:
-    st.session_state.clear()
+    # 清空结果、标记
+    st.session_state.result_pack = None
+    st.session_state.result_msg = ""
+    st.session_state.hit_ids = set()
+    # 打开清空开关，下一轮渲染所有输入框变成空白、单选切回无满减
+    st.session_state.do_clear = True
     st.rerun()
+else:
+    # 不是清空，关闭清空开关，恢复正常
+    st.session_state.do_clear = False
 
 # 【点击计算】
 if run_btn:
@@ -229,13 +249,12 @@ if run_btn:
                     if f_txt.strip() == "" or r_txt.strip() == "":
                         rule_list.append(None)
                     else:
-                        try:
                             f = Decimal(f_txt.strip())
                             r = Decimal(r_txt.strip())
                             rule_list.append((f, r))
-                        except:
-                            rule_err = True
-                            break
+                    except:
+                        rule_err = True
+                        break
                 if rule_err:
                     st.session_state.result_msg = "❌ 满减规则数字非法！"
                     st.session_state.result_pack = None
@@ -294,7 +313,6 @@ if run_btn:
                             if rule_texts[4] and g5_items:
                                 msg_lines.append(f"<b>{rule_texts[4]}：</b>{fmt_group(g5_items)} = {g5} → 结算：{r5}")
                             st.session_state.result_msg = "\n\n".join(msg_lines)
-                            # 新增这一行：状态更新完成后自动刷新页面，一次点击就出标记
                             st.rerun()
 
 # 【固定展示结果区域】
