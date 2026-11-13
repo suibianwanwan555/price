@@ -109,8 +109,6 @@ if "result_msg" not in st.session_state:
     st.session_state.result_msg = ""
 if "hit_ids" not in st.session_state:
     st.session_state.hit_ids = set()
-
-# 【新增标记：清空开关】
 if "do_clear" not in st.session_state:
     st.session_state.do_clear = False
 
@@ -133,7 +131,6 @@ col_left, col_right = st.columns([3.4, 2])
 item_data = []
 with col_left:
     st.subheader("商品列表（共30条）")
-    # 表头：序号｜单价｜折扣｜无满减｜满减1｜满减2｜满减3｜满减4｜满减5｜标记
     h_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.6])
     h_cols[0].write("序号")
     h_cols[1].write("单价")
@@ -149,7 +146,7 @@ with col_left:
 
     for idx in range(30):
         seq, default_price, default_disc, default_sel = test_rows[idx]
-        # 如果触发清空，默认值改为空白、单选默认0（无满减）
+        # 清空标记打开：全部默认空白、单选默认0（无满减）
         if st.session_state.do_clear:
             default_price = ""
             default_disc = ""
@@ -159,15 +156,14 @@ with col_left:
         price_str = r_cols[1].text_input("", value=default_price, key=f"p_{idx}", label_visibility="collapsed")
         disc_str = r_cols[2].text_input("", value=default_disc, key=f"d_{idx}", label_visibility="collapsed")
 
-        # ========== 重点修改：横向单选，每一列对应一个选项 ==========
-        sel = r_cols[3].radio("", options=[0], index=0 if default_sel == 0 else None, key=f"sel0_{idx}", label_visibility="collapsed")
-        sel = r_cols[4].radio("", options=[1], index=0 if default_sel == 1 else None, key=f"sel1_{idx}", label_visibility="collapsed")
-        sel = r_cols[5].radio("", options=[2], index=0 if default_sel == 2 else None, key=f"sel2_{idx}", label_visibility="collapsed")
-        sel = r_cols[6].radio("", options=[3], index=0 if default_sel == 3 else None, key=f"sel3_{idx}", label_visibility="collapsed")
-        sel = r_cols[7].radio("", options=[4], index=0 if default_sel == 4 else None, key=f"sel4_{idx}", label_visibility="collapsed")
-        sel = r_cols[8].radio("", options=[5], index=0 if default_sel == 5 else None, key=f"sel5_{idx}", label_visibility="collapsed")
+        sel0 = r_cols[3].radio("", options=[0], index=0 if default_sel == 0 else None, key=f"sel0_{idx}", label_visibility="collapsed")
+        sel1 = r_cols[4].radio("", options=[1], index=0 if default_sel == 1 else None, key=f"sel1_{idx}", label_visibility="collapsed")
+        sel2 = r_cols[5].radio("", options=[2], index=0 if default_sel == 2 else None, key=f"sel2_{idx}", label_visibility="collapsed")
+        sel3 = r_cols[6].radio("", options=[3], index=0 if default_sel == 3 else None, key=f"sel3_{idx}", label_visibility="collapsed")
+        sel4 = r_cols[7].radio("", options=[4], index=0 if default_sel == 4 else None, key=f"sel4_{idx}", label_visibility="collapsed")
+        sel5 = r_cols[8].radio("", options=[5], index=0 if default_sel == 5 else None, key=f"sel5_{idx}", label_visibility="collapsed")
 
-        # 读取当前选中值
+        # 判断选中
         if st.session_state.get(f"sel0_{idx}") == 0:
             final_sel = 0
         elif st.session_state.get(f"sel1_{idx}") == 1:
@@ -184,7 +180,6 @@ with col_left:
             final_sel = default_sel
 
         item_data.append( (idx, price_str, disc_str, final_sel) )
-        # 标记渲染
         if idx in st.session_state.hit_ids:
             r_cols[9].markdown("✅")
         else:
@@ -193,7 +188,8 @@ with col_left:
 # 【右侧参数面板】
 with col_right:
     st.subheader("参数设置")
-    target_val = st.text_input("目标额度", value="1401", key="target_input")
+    target_default = "" if st.session_state.do_clear else "1401"
+    target_val = st.text_input("目标额度", value=target_default, key="target_input")
 
     st.markdown("#### 5组满减规则")
     rule_data = []
@@ -201,7 +197,6 @@ with col_right:
     default_rules = [["50","5"],["200","20"],["300","30"],["250","15"],["400","20"]]
     for i in range(5):
         c1, c2 = st.columns(2)
-        # 清空触发时，满减输入框默认空白
         f_val = "" if st.session_state.do_clear else default_rules[i][0]
         r_val = "" if st.session_state.do_clear else default_rules[i][1]
         f_txt = c1.text_input(f"满减{i+1}：满", value=f_val, key=f"rule_full_{i}")
@@ -219,17 +214,43 @@ with col_right:
     st.divider()
     result_area = st.container()
 
-# ========== 【这里只修改清空全部逻辑】 ==========
+# ========== 【清空全部逻辑 - 重点修改这里】 ==========
 if clear_btn:
-    # 清空结果、标记
+    # 清空结果标记
     st.session_state.result_pack = None
     st.session_state.result_msg = ""
     st.session_state.hit_ids = set()
-    # 打开清空开关，下一轮渲染所有输入框变成空白、单选切回无满减
+
+    # 删除所有控件key，强制重置
+    for idx in range(30):
+        if f"p_{idx}" in st.session_state:
+            del st.session_state[f"p_{idx}"]
+        if f"d_{idx}" in st.session_state:
+            del st.session_state[f"d_{idx}"]
+        if f"sel0_{idx}" in st.session_state:
+            del st.session_state[f"sel0_{idx}"]
+        if f"sel1_{idx}" in st.session_state:
+            del st.session_state[f"sel1_{idx}"]
+        if f"sel2_{idx}" in st.session_state:
+            del st.session_state[f"sel2_{idx}"]
+        if f"sel3_{idx}" in st.session_state:
+            del st.session_state[f"sel3_{idx}"]
+        if f"sel4_{idx}" in st.session_state:
+            del st.session_state[f"sel4_{idx}"]
+        if f"sel5_{idx}" in st.session_state:
+            del st.session_state[f"sel5_{idx}"]
+    for i in range(5):
+        if f"rule_full_{i}" in st.session_state:
+            del st.session_state[f"rule_full_{i}"]
+        if f"rule_reduce_{i}" in st.session_state:
+            del st.session_state[f"rule_reduce_{i}"]
+    if "target_input" in st.session_state:
+        del st.session_state["target_input"]
+
+    # 打开清空开关
     st.session_state.do_clear = True
     st.rerun()
 else:
-    # 不是清空，关闭清空开关，恢复正常
     st.session_state.do_clear = False
 
 # 【点击计算】
