@@ -144,15 +144,15 @@ with col_right:
 
 with col_left:
     st.subheader("商品列表（共30条）")
-    st.caption("分组：0=无满减，1~5对应满减1~5")
+    st.caption("减免：0=无满减，1~5对应满减1~5")
     item_data = []
     for idx in range(30):
         seq, default_price, default_disc, default_sel = test_rows[idx]
-        cc = st.columns([0.5,1,1,1.2,1,1,1,1,1])
+        cc = st.columns([0.5,1,1,4])
         cc[0].write(f"{seq:02d}")
         price_str = cc[1].text_input("单价", value=default_price, key=f"p_{idx}")
         disc_str = cc[2].text_input("折扣", value=default_disc, key=f"d_{idx}")
-        sel = cc[3].radio("分组", options=[0,1,2,3,4,5], horizontal=True, index=default_sel, key=f"sel_{idx}")
+        sel = cc[3].radio("减免", options=[0,1,2,3,4,5], horizontal=True, index=default_sel, key=f"sel_{idx}")
         item_data.append( (idx, price_str, disc_str, sel) )
 
 
