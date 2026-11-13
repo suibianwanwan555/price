@@ -3,7 +3,7 @@ import streamlit as st
 
 getcontext().prec = 20
 
-# ===================== 核心计算函数（和电脑版完全一致） =====================
+# ===================== 核心计算函数 =====================
 def calc_total_after_group_reduce(selected_items, rule_list):
     g0_items = []
     g1_items = []
@@ -117,7 +117,7 @@ test_rows = [
     (26,240,"88",4), (27,250,"82",4), (28,260,"",4), (29,270,"",0), (30,280,"",1),
 ]
 
-col_left, col_right = st.columns([3, 2])
+col_left, col_right = st.columns([3.2, 2])
 
 with col_right:
     st.subheader("参数设置")
@@ -144,15 +144,35 @@ with col_right:
 
 with col_left:
     st.subheader("商品列表（共30条）")
-    st.caption("减免：0=无满减，1~5对应满减1~5")
+    # 表头只画一次
+    h_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7])
+    h_cols[0].write("序号")
+    h_cols[1].write("单价")
+    h_cols[2].write("折扣")
+    h_cols[3].write("无满减")
+    h_cols[4].write("满减1")
+    h_cols[5].write("满减2")
+    h_cols[6].write("满减3")
+    h_cols[7].write("满减4")
+    h_cols[8].write("满减5")
+    st.divider()
+
     item_data = []
     for idx in range(30):
         seq, default_price, default_disc, default_sel = test_rows[idx]
-        cc = st.columns([0.5,1,1,4])
-        cc[0].write(f"{seq:02d}")
-        price_str = cc[1].text_input("单价", value=default_price, key=f"p_{idx}")
-        disc_str = cc[2].text_input("折扣", value=default_disc, key=f"d_{idx}")
-        sel = cc[3].radio("减免", options=[0,1,2,3,4,5], horizontal=True, index=default_sel, key=f"sel_{idx}")
+        r_cols = st.columns([0.4, 1, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7])
+        r_cols[0].write(f"{seq:02d}")
+        price_str = r_cols[1].text_input("", value=default_price, key=f"p_{idx}", label_visibility="collapsed")
+        disc_str = r_cols[2].text_input("", value=default_disc, key=f"d_{idx}", label_visibility="collapsed")
+        # 单选按钮组，横向分列
+        sel = None
+        options = [0,1,2,3,4,5]
+        keys_radio = [f"sel_{idx}_0",f"sel_{idx}_1",f"sel_{idx}_2",f"sel_{idx}_3",f"sel_{idx}_4",f"sel_{idx}_5"]
+        for opt_i, opt_val in enumerate(options):
+            if r_cols[3 + opt_i].radio("", [opt_val], index=0 if default_sel==opt_val else None, key=keys_radio[opt_i], label_visibility="collapsed") is not None:
+                sel = opt_val
+        if sel is None:
+            sel = default_sel
         item_data.append( (idx, price_str, disc_str, sel) )
 
 
